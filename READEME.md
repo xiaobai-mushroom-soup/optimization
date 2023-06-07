@@ -125,3 +125,153 @@
  - 请求优先级
 
 因为HTTP3出现，此处不对SPDY协议深入研究
+
+ ## HTTP优化
+
+ 对于HTTP优化，有两个大方向：
+ 1. 减少请求次数
+ 2. 减少单词请求所花费的时间
+
+ 和这两项最相关的就是最近流行的工程化打包工具：webpack（vite/rollup等），此处以webpack为例；
+
+ ### webpack性能瓶颈
+
+ webpack是非常强大的，但是再使用过程中，其需要优化的点有两方面：
+ 1. webpack构建过程花费时间过多
+ 2. webpack打包结果体积过大
+
+ #### webpack优化策略
+
+ ##### 策略一：构建过程提速策略
+
+ webpack构建过程是相对比较缓慢的，其主要原因是loader的缘故。
+
+ **loader-优化方案一**
+ 
+ 对于loader，最常使用的优化策略是：使用`include`或`exclude`来避免不必要的转译；
+ 如：babel官方给出的示例
+ ```js
+ module: {
+  rules: [
+    {
+      test: /\.js$/,
+      exclude: /(node_modules|bower_components)/,
+      use: {
+        loader: 'babel-loader',
+        options: {
+          presets: ['@babel/preset-env']
+        }
+      }
+    }
+  ]
+}
+ ```
+ 这段代码可以让babel避免去解析`node_modules`文件夹或`bower_components`文件夹。
+
+ > 但是通过限定文件范围带来的性能提升是有限的。
+
+**loader-优化方案二**
+
+ 除了排除部分文件夹外，我们还可以考虑使用缓存策略；
+ 即，开启缓存，并且将转译结果缓存至文件系统。
+ 我们只需要：
+ ```js
+ module: {
+  rules: [
+    {
+      test: /\.m?js$/,
+      exclude: /(node_modules|bower_components)/,
+      use: {
+        loader: 'babel-loader?cacheDirectory=true',
+        options: {
+          presets: ['@babel/preset-env'],
+          plugins: ['@babel/plugin-proposal-object-rest-spread']
+        }
+      }
+    }
+  ]
+}
+ ```
+> 对于loader方面：在对loader配置时，要考虑通过使用exclude去避免babel-loader 对不必要的文件的处理。
+
+ **plugin-处理第三方库**
+
+ 第三方库有时候会非常大【如node_modules】,但是又不能缺少他们。
+
+ 我们可以：
+ - 使用`CommonsChunkPlugin`，但是它会在每次构建时都会重新构建一次`vendor`
+ - 使用`Externals`,可以排除部分应用程序
+ - 【推荐】使用`DllPlugin`
+
+ `DllPlugin`会把第三方库单独打包到一个文件中，这个文件就是一个单纯的依赖库。
+ **这个依赖库不会跟着业务代码一起被重新打包，只有当依赖自身发生版本变化时才会重新打包**
+
+ 使用`DllPlugin`:
+ - 基于dll专属的配置文件，打包dll库
+ - 基于webpack.config.js文件，打包业务代码
+
+```js
+const path = require('path')
+const webpack = require('webpack')
+
+module.exports = {
+    entry: {
+      // 依赖的库数组
+      vendor: [
+        'prop-types',
+        'babel-polyfill',
+        'react',
+        'react-dom',
+        'react-router-dom',
+      ]
+    },
+    output: {
+      path: path.join(__dirname, 'dist'),
+      filename: '[name].js',
+      library: '[name]_[hash]',
+    },
+    plugins: [
+      new webpack.DllPlugin({
+        // DllPlugin的name属性需要和libary保持一致
+        name: '[name]_[hash]',
+        path: path.join(__dirname, 'dist', '[name]-manifest.json'),
+        // context需要和webpack.config.js保持一致
+        context: __dirname,
+      }),
+    ],
+}
+```
+
+ 在编写完后，运行这个配置文件，dist文件夹内会出现`vendor-manifest.json` 、`vendor.js`
+
+ > 其中`vendor.js`是我们第三方库打包的结果。
+ > 而`vendor-manifest.json`则是用于描述每个第三方库对应的具体路径。
+
+之后，我们只需要在`webpack.config.js`内针对`dll`稍作配置即可：
+
+```js
+const path = require('path');
+const webpack = require('webpack')
+module.exports = {
+  mode: 'production',
+  // 编译入口
+  entry: {
+    main: './src/index.js'
+  },
+  // 目标文件
+  output: {
+    path: path.join(__dirname, 'dist/'),
+    filename: '[name].js'
+  },
+  // dll相关配置
+  plugins: [
+    new webpack.DllReferencePlugin({
+      context: __dirname,
+      // manifest就是我们第一步中打包出来的json文件
+      manifest: require('./dist/vendor-manifest.json'),
+    })
+  ]
+}
+```
+
+至此针对于`dll`的webpack构建过程结束。
