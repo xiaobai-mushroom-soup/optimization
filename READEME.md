@@ -275,3 +275,133 @@ module.exports = {
 ```
 
 至此针对于`dll`的webpack构建过程结束。
+
+ #### 策略二：开启webpack多进程处理loader【Happypack】
+ 
+ webpack缺点是单线程，这样当存在多个任务的时候，还是只能一项一项的去执行。
+ 但是我们CPU是多核的，我们可以借助这个特性。
+ 在webpack中有一个插件叫`Happypack`，它可以让我们充分的利用CPU多核特性，帮我们将任务分发给多个子进程去并发执行，从而提高**打包效率**。
+
+ 使用：
+ 如果要使用`Happypack`,分三步走：
+ 1. 首先，需要手动创建一个进程池 
+ 2. 在配置loader的时候，为loader配置指定对应的的`Happypack`实例名字。
+ 3. 在`plugins`中注册`Happypack`，声明对应的`Happypack`实例名字;指定进程池(就是指定前面创建的进程池名称);指定对应的`loader`
+
+```js
+const HappyPack = require('happypack')
+// 1. 手动创建进程池
+const happyThreadPool =  HappyPack.ThreadPool({ size: os.cpus().length })
+
+module.exports = {
+  module: {
+    rules: [
+      ...
+      {
+        test: /\.js$/,
+        // 2. 问号后面的查询参数指定了处理这类文件的HappyPack实例的名字
+        loader: 'happypack/loader?id=happyBabel',
+        ...
+      },
+    ],
+  },
+  plugins: [
+    ...
+    new HappyPack({
+      // 3. 这个HappyPack的“名字”就叫做happyBabel，和楼上的查询参数遥相呼应
+      id: 'happyBabel',
+      // 指定进程池
+      threadPool: happyThreadPool,
+      loaders: ['babel-loader?cacheDirectory']
+    })
+  ],
+}
+```
+ 
+ ### 查看webpack【可视化】构建结果
+
+ 可以使用`webpack bundle-analyzer`插件，来查看构建结果包大小占比可视化操作面板。
+ **该插件将会把包内的各个模块的大小和依赖关系，以矩形树图的形式展现出来。**
+
+ 使用方式：
+
+ ```js
+const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
+ 
+module.exports = {
+  plugins: [
+    new BundleAnalyzerPlugin()
+  ]
+}
+ ```
+
+ #### webpack优化3：Tree-Shaking
+
+Tree-Shaking 是基于ES6的`import/export`语法的。
+而Tree-Shaking 可以在编译过程中知道那些模块没有真正被使用到，而这些没有被使用到的代码，在最后打包的时候会被删掉。
+
+**webpack**的Tree-Shaking适合处理模块级别的荣誉代码，对于粒度更细的冗余代码，一般会放在JS或CSS的压缩分离过程中去。
+
+**优化3补充**：
+对于JS/CSS代码压缩分离，当下webpack使用较多的为`UglifyJsPlugin`,它可以通过自定义去设置压缩相关的操作。
+操作方法：
+```js
+  const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
+  module.exports = {
+  plugins: [
+    new UglifyJsPlugin({
+      // 允许并发
+      parallel: true,
+      // 开启缓存
+      cache: true,
+      compress: {
+        // 删除所有的console语句    
+        drop_console: true,
+        // 把使用多次的静态值自动定义为变量
+        reduce_vars: true,
+      },
+      output: {
+        // 不保留注释
+        comment: false,
+        // 使输出的代码尽可能紧凑
+        beautify: false
+      }
+    })
+  ]
+  }
+```
+> 上方是webpack3写法，在webpack4中已经默认使用了`uglifyjs-webpack-plugin`对代码进行压缩了，而在webpack4中，我们只需要配置`optimization.minimize`与`optimization.minimizer`来自定义压缩相关的操作。
+
+ **webpack-按需加载**
+
+ webpack按需加载主要是针对文件按需加载，比如当使用路由的时候：当所有组件都使用同步加载，如果页面非常的复杂，那么将会导致页面加载非常的卡顿。
+
+ 如果想要配置按需加载，首先第一步配置`webpack.config/js`：
+ ```js
+ output: {
+    path: path.join(__dirname, '/../dist'),
+    filename: 'app.js',
+    publicPath: defaultSettings.publicPath,
+    // 指定 chunkFilename
+    chunkFilename: '[name].[chunkhash:5].chunk.js',
+},
+ ```
+
+然后路由处：
+```js
+const getComponent => (location, cb) {
+  require.ensure([], (require) => { // 注意这里
+    cb(null, require('../pages/BugComponent').default)
+  }, 'bug')
+},
+...
+<Route path="/bug" getComponent={getComponent}>
+```
+
+上方使用到了
+`require.ensure(dependencies, callback, chunkName)`
+这是一个**异步方法**：当在webpack打包时，对应的组件文件将会被单独打包成一个文件，只有当我们访问这个组件时，这个异步方法的回调才会生效，这时候才会真正的去获取这个组件的内容，从而实现按需加载。
+
+> 在React-Router4的按需加载是使用了Code-Splitting，而Code-Splitting底层用到了一个叫`Bundle-Loader`的东西，这个loader底层还是使用的`require.ensure`来实现的。
+
+所谓的按需加载，根本上就是在正确的时机去触发响应的回调。
