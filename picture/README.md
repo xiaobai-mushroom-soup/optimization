@@ -1,0 +1,93 @@
+ # 图片优化
+ 图片是网页的灵魂
+ 在用户角度，图片是可以直观看到的，而JS与CSS用户则不会关心。
+
+ 而一个图片有可能是非常大的！
+ 我们在做图片优化的过程中实际上就是对**图片质量**与**图片大小**之间的权衡。
+
+ 而图片优化的任务：主要是让我们尽可能的去寻找质量与体积(下载性能)之间的那个平衡点。
+
+ 查看资源的加载情况：https://httparchive.org/reports/page-weight#bytesTotal
+ 这个网站会定期抓取Web上的站点，并且记录资源加载/网页API调用情况。
+ > 我们可以通过它实时地看到世界范围内Web资源的统计信息
+
+ ## 前置概念
+ 当下应用较多的图片格式有：**JPEG/JPG**、**PNG**、**WebP**、**Base64**、**SVG**;这些只是常用的，但计算机图片格式其实还有很多。
+
+ ### 二进制位数与色彩的关系
+ 在计算机存储中，像素都是用二进制来表示的。
+ **一像素对应的二进制位数越多，则代表这它可以表示的颜色种类越多，成像效果也就越好。但是同样也会带来一个问题 ----文件的体积也会变得更大**
+
+ ### JPEG/JPG
+ 该格式图片的特点：**体积小、加载块、不支持透明、有损压缩。**
+
+ JPG使用有损压缩，从而让该图片格式的图片体积相比较而言其他格式而言会比较小，并且肉眼看起来并没有过大差别。
+> 当将JPG图片压缩至50%以下时，该格式图片依旧可以保留60%的图片品质。
+> JPG格式以24位存储单个图，可以呈现出1600万种颜色。
+
+ #### JPG应用场景
+ 页面中较大的图片多是采用JPG格式的图片，如：轮播图使用的图片，与网页背景图使用的图片等。
+ 如淘宝、京东首页的轮播图。
+
+ #### JPG缺陷
+ 当将其作为LOGO、矢量图形图标这种【线条感、颜色对比强烈】的图像时，压缩导致的图片模糊会变得非常的明显。
+> 同时，JPG不支持透明图片。
+
+ ### PNG
+ 该图片的特点是：**图片展示出来的质量高、文件体积较大、支持透明图、无损压缩**
+ 
+ PNG也被称为*可移植网络图形格式*，这是种高保真的图片格式。PNG分为`PNG-8`和`PNG-24`，8与24主要是代表文件存储位数。
+ 它们的区别主要在于呈现出的颜色数量：`PNG-8`能够呈现出256种颜色；而`PNG-24`则能够呈现出1600万种色彩。
+ **PNG优点很明显，但是缺点也是非常明显的：文件体积太大。**
+
+ #### PNG-8与PNG-24选择场景
+ 一般来说8就足够使用，但是如果设计追求极致的视觉输出，不允许有色彩偏差时，则就要牺牲部分性能选择24了。
+
+ 使用场景：
+ 由于PNG格式图片的特性，常将这种格式应用于：呈现图片较小的LOGO、或者那种颜色较为简单对比强烈的图片或背景等。
+ 【典型的就是网页logo与界面精灵图的应用。】
+ ### SVG
+ SVG是**可缩放矢量图形**，这是一种基于XML语法的图像格式。
+ SVG的特性就是**文件体积小**、**可压缩性强**、**图片无限放大不失真**、**读写灵活**。
+
+ **SVG缺点：渲染成本较高(拉低了性能)、学习成本高**
+
+ #### SVG使用场景
+ SVG可以直接引入或者当作img的src进行引入。
+ 因此在一些小图标的使用抉择上，SVG也会占有一席之地。特别是当我们做响应式网站，PC端与移动端都展示同样的图标时，SVG是个不错的选择！
+ ### Base64
+ Base64是一种编码格式，它的特点是**本身就是一段代码**、**不会产生额外的HTTP请求**、**依赖编码**。
+ 
+ 使用Base64的目的就是为了减少网页加载图片时对服务器的请求次数而诞生的。
+ 一个base64格式图片：
+ ```
+ data:image/png;base64,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
+ ```
+
+Base64缺陷：**图片经过Base64编码后，体积会膨胀到源文件的4/3。**
+因此Base64只适合将网页中的小图片编码使用。
+使用时机参考：
+- 当图片尺寸**非常的小**时，可以使用Base64进行替换
+- 当图片无法以**精灵图**形式与其他图像结合时，可以使用Base64进行替换
+- 图片的更新频率非常低(无需我们主动重复编码与修改文件内容时，在维护成本角度考虑，可以使用base64)；
+
+> 原生转换base64的api： `atob`与`btoa`.
+
+在前端工程化当下，我们完全可以将小图片转换交给工程化工具去做。
+#### 另一种减少HTTP请求的方式：精灵图
+所谓的精灵图就是将多个**小图标**整合到一张图片上去，然后利用`background-*`等一系列的属性，选择定位到对应的小图标上。
+精灵图多使用PNG格式，因为它可以最大程度保留颜色对比度与线条流畅度。
+### WebP
+ WebP 是最近Google新推出的一种图片格式。
+ 它有JPG、PNG、GIF的优点。
+ 并且也对于缺点也进行了部分优化改善：比JPG更小、支持透明度。
+ WebP缺陷：**支持性不友好、同时也会为服务器增加负担(编码WebP格式图片会比JPG占用更多的计算资源)**
+ #### 在结合兼容情况下使用WebP
+ 方式一：我们可以首先去判断浏览器，是否支持，如果支持WebP则提供对应的路径，如果不支持，则提供降级处理(使用JPG)。
+ 方式二【推荐】：在给WebP格式图片命名时，携带一个其他后缀。当浏览器不支持webp时，则会自动降级处理，如淘宝的：
+ ```
+ <img src="//img.alicdn.com/tps/i4/TB1CKSgIpXXXXccXXXX07tlTXXX-200-200.png_60x60.jpg_.webp" alt="手机app - 聚划算" class="app-icon">
+ ```
+方式三：前端维护请求头`Accept`传给后端，让服务器去选择传回的图片格式。【这个好处是当WebP兼容性改变时，前端无需再去写兼容代码，一劳永逸】
+
+
