@@ -7,6 +7,12 @@
     <title>Document</title>
   </head>
   <body>
+    <a href="http://127.0.0.1:5500/cache/test2.html" rel="opener" target="_blank">测试</a>
+    <br>
+    <br>
+    <br>
+    <br>
+    <div id="laotie">老铁666</div>
     <script>
       window.navigator.serviceWorker
         .register("./test.js")
@@ -16,6 +22,12 @@
         .catch((err) => {
           console.error("注册失败");
         });
+        window.sessionStorage.setItem('test',11111)
+        console.log('test1',window.sessionStorage.getItem('test'))
+        const dom = document.getElementById('laotie');
+        dom.addEventListener('click',()=>{
+          window.open('http://127.0.0.1:5500/cache/test2.html')
+        })
     </script>
   </body>
 </html>
